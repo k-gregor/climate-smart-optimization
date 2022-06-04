@@ -14,7 +14,7 @@ color_discrete_map={
 }
 
 
-forest_fraction_file = '/home/konni/Documents/konni/projekte/phd/data/simulation_inputs/other_inputs/global_forest_ST_1871-2011_CORRECTED_1y_mask_gridlist_europe_forexclim.txt'
-stand_fraction_file = '/home/konni/Documents/konni/projekte/phd/data/simulation_inputs/other_inputs/global_nat_for_LC_1871-2011_CORRECTED_1y_mask_gridlist_europe_CORRECT.txt'
+forest_fraction_file = '/home/konni/Documents/phd/data/simulation_inputs/other_inputs/global_forest_ST_1871-2011_CORRECTED_1y_mask_gridlist_europe_forexclim.txt'
+stand_fraction_file = '/home/konni/Documents/phd/data/simulation_inputs/other_inputs/global_nat_for_LC_1871-2011_CORRECTED_1y_mask_gridlist_europe_CORRECT.txt'
 
 months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

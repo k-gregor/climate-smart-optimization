@@ -1,4 +1,6 @@
-run_dir = '/home/konni/Documents/konni/projekte/phd/runs/cluster_runs/dist_no_fire_in_managed/'
+# run_dir = '/home/konni/Documents/phd/runs/cluster_runs/dist_no_fire_in_managed/'
+# run_dir = '/home/konni/Documents/phd/runs/cluster_runs/increase_dist/'
+run_dir = '/home/konni/Documents/phd/runs/cluster_runs/increase_dist_natural/'
 
 rcp26_simulations = dict(
     base=run_dir + 'base_rcp26/',

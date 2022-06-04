@@ -1,6 +1,6 @@
 import pandas as pd
 from helper.chunk_filter import ChunkFilter
-
+import numpy as np
 
 def get_real_fpc_forest(basepath, lon_of_interest=None, lat_of_interest=None, years_of_interest=None, only_managed=False, fpc_type='fpc'):
     return get_real_fpc_forest(basepath, [(lon_of_interest, lat_of_interest)], years_of_interest, only_managed, fpc_type)
@@ -34,6 +34,13 @@ def get_real_fpc_forest(basepath, lons_lats_of_interest=None, years_of_interest=
 
     fpc_forest2 = fpc_forest2.loc[~fpc_forest2.index.duplicated(keep='first')]
     active_fraction_forest = active_fraction_forest.loc[~active_fraction_forest.index.duplicated(keep='first')]
+
+    if fpc_type == 'lai':
+        fpc_forest2 = 1-np.exp(-0.5*fpc_forest2)
+
+    if fpc_type == 'dens':
+        fpc_forest2 = fpc_forest2.mul(crownarea)
+
 
     mul = fpc_forest2.mul(active_fraction_forest)
     if not only_managed:

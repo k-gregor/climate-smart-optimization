@@ -23,6 +23,17 @@ class OptimizationType(Enum):
 
 
 def normalize_for_uncertainty_scenarios(rcps, scores, lower_is_better=False):
+    """
+    Currently have wrong order of axis like below f        fpc = sr.get_real_fpc_forest('./', only_managed=True)
+        snow = pd.read_csv('snow_matching_fpc_forest.out', delim_whitespace=True).set_index(['Lon', 'Lat', 'Year'])
+
+        snow = snow.loc[~snow.index.duplicated(keep='first')]
+
+        albedo = target.get_forest_area_albedo(fpc, snow)or legacy reasons
+    scores: dict[simulation] --> [values per rcp]
+    If we stick with this optimization with the rcps as uncertainty scenarios, we should switch the order to avoid bugs
+    """
+
     # first, convert the scores map of the current variable (simulation --> [value_rcp1, value_rcp2, ...] )
     # to rcp --> [value_simulation1, value_simulation_2]
     # because we want to normalize the values inside an rcp. note that values across rcps should not be mixed, they are the different points in our uncertainty space.
@@ -100,6 +111,8 @@ def get_es_vals_new(rcps,
     swp = {}
     harvest = {}
     hlp = {}
+    albedo_jul = {}
+    albedo_jan = {}
     csequestration = {}
     vegc = {}
     biodiversity_cwd = {}
@@ -121,6 +134,8 @@ def get_es_vals_new(rcps,
         harvest[simulation] = []
         hlp[simulation] = []
         csequestration[simulation] = []
+        albedo_jul[simulation] = []
+        albedo_jan[simulation] = []
         vegc[simulation] = []
         biodiversity_cwd[simulation] = []
         biodiversity_big_trees[simulation] = []
@@ -156,6 +171,9 @@ def get_es_vals_new(rcps,
             fluxes = get_fluxes_with_new_harvests(basepath, 1990, future_year2, [(lon, lat)])
             hlp[simulation].append(aggregation(fluxes, 'slow_harv'))
 
+            albedo_jul[simulation].append(aggregation(get_albedo(basepath, future_year1, future_year2, [(lon, lat)]), 'albedo_jul'))
+            albedo_jan[simulation].append(aggregation(get_albedo(basepath, future_year1, future_year2, [(lon, lat)]), 'albedo_jan'))
+
             stem_harvests_m3_per_ha = get_harvests_via_species_file(basepath, 1800, 2200, lons_lats_of_interest=[(lon, lat)], residuals=False)
             harvest[simulation].append(aggregation(stem_harvests_m3_per_ha, 'total_harv_m3_wood_per_ha'))
 
@@ -185,6 +203,8 @@ def get_es_vals_new(rcps,
     all_scores_dict_raw['hlp'] = hlp
     all_scores_dict_raw['csequestration'] = csequestration
     all_scores_dict_raw['vegc'] = vegc
+    all_scores_dict_raw['albedo_jan'] = albedo_jan
+    all_scores_dict_raw['albedo_jul'] = albedo_jul
     all_scores_dict_raw['biodiversity_cwd'] = biodiversity_cwd
     all_scores_dict_raw['biodiversity_big_trees'] = biodiversity_big_trees
     all_scores_dict_raw['biodiversity_size_diversity'] = biodiversity_size_diversity
@@ -301,14 +321,25 @@ def compute_mitigation(cflux, discounting_factors, base_year = 2010):
 
     cflux = cflux.set_index('Year')
 
-    energy_substitution_factor = 0.67  # Knauf2015
-    end_of_life_energy_fraction = 0.8  # Knauf2015
-    account_for_paper_in_fuel_wood = 0.95  # Knauf2015: 85% of paper products will be used for energy. Our pool contains fuel wood and paper.
-    cflux['fuel_substitution'] = ((cflux['Harvest'] + cflux['LU_ch']) * account_for_paper_in_fuel_wood + cflux['Slow_h'] * end_of_life_energy_fraction) * energy_substitution_factor
+    #note: cflux['slow_h'] is accounted for in C stocks!!
+
+    #Harvest = H_R_atm + H_S_atm
+    #Lu_ch = LU_R_atm + Lu_S_atm
+    # harvest residues and parts of stem harvests are used as fuelwood
+    harvested_fuel_wood = cflux['H_R_atm'] + cflux['LU_R_atm'] + (cflux['H_S_atm'] + cflux['LU_S_atm']) * 0.305
+    harvested_short_pool = (cflux['H_S_atm'] + cflux['LU_S_atm']) * (1-0.305)
+    harvests_for_medium_and_slow_pool = (cflux['H_slow'] + cflux['Slow_LU'])
 
     # the Knauf value does not contain end of life burning of material in the substitution factor!
-    material_substitution_factor = 1.5  # from Krause2020: wood usage in Germany Knauf2015, cf. factors on average 2.1 for Sathre2010
-    cflux['material_substitution'] = (cflux['H_slow'] + cflux['Slow_LU']) * material_substitution_factor
+    # 1.5: wood usage in Germany Knauf2015, cf. factors on average 2.1 for Sathre2010
+    # now also account for landfilling, 1.1 from Sathre2010 for landfilled wood products, 23% of waste is landfilled in Europe
+    material_substitution_factor = 0.77 * 1.5 + 0.23 * 1.1
+    cflux['material_substitution'] = (harvests_for_medium_and_slow_pool) * material_substitution_factor
+
+    # now, all material usage has been accounted for including end-of-life, except the 77% of products that are not landfilled, for those we assume energy recovery
+    decayed_medium_and_long_pool = cflux['Slow_h']
+    energy_substitution_factor = 0.67  # Knauf2015
+    cflux['fuel_substitution']  = (harvested_fuel_wood + harvested_short_pool * 0.77 + decayed_medium_and_long_pool * 0.77) * energy_substitution_factor
 
     if discounting_factors is not None:
         cflux['fuel_substitution'] *= discounting_factors['factor']
@@ -332,7 +363,6 @@ def compute_mitigation(cflux, discounting_factors, base_year = 2010):
 
 
 def get_new_total_mitigation(cflux, cpool, discounting=None, base_year = 2010):
-
     cflux = cflux.set_index(['Lon', 'Lat', 'Year'])
     cpool = cpool.set_index(['Lon', 'Lat', 'Year'])
 
@@ -345,7 +375,6 @@ def get_new_total_mitigation(cflux, cpool, discounting=None, base_year = 2010):
 
 
 def get_discounting_factors_rcp(rcp):
-    # data from RCP Database https://tntcat.iiasa.ac.at/RcpDb
     co2_emissions = pd.read_csv('total_co2_emissions_oecd_rcp_db-1.csv').drop(columns=['Region', 'Variable', 'Unit']).rename(columns={'Scenario':'Year'}).set_index('Year').transpose()
     co2_emissions.index = co2_emissions.index.astype(int)
     for year in range(2000, 2201):
@@ -354,7 +383,7 @@ def get_discounting_factors_rcp(rcp):
     co2_emissions = co2_emissions.sort_index()
     co2_emissions = co2_emissions.interpolate()
     discount_rates = co2_emissions / co2_emissions.loc[2010, 'rcp26']
-    discount_rates['rcp85'].loc[2010:2200] = 1 # no discounting in high RCP-scenario.
+    discount_rates['rcp85'].loc[2010:2200] = 1
     discount_rates['rcp26'][discount_rates['rcp26'] < 0] = 0
     discount_rates_df = pd.DataFrame(discount_rates[rcp]).rename(columns={rcp: 'factor'})
     discount_rates_df.index.name = 'Year'
@@ -423,9 +452,15 @@ def get_cpool(basepath, year1, year2, lons_lats_of_interest):
     return cpool
 
 
-def get_cflux(basepath, year1, year2, lons_lats_of_interest):
-    cpool = ph.read_for_years(basepath + 'cflux.out', year1=year1, year2=year2, lons_lats_of_interest=lons_lats_of_interest)
-    return cpool
+def get_albedo(basepath, year1, year2, lons_lats_of_interest):
+    fpc_forest_real = sr.get_real_fpc_forest(basepath, years_of_interest=[year1, year2], lons_lats_of_interest=lons_lats_of_interest, fpc_type='lai', only_managed=False)
+
+    snow = ph.read_for_years(basepath + 'mysnow.out', year1=year1, year2=year2, lons_lats_of_interest=lons_lats_of_interest).set_index(['Lon', 'Lat', 'Year'])
+    snow = snow.loc[~snow.index.duplicated(keep='first')]
+
+    fpc_with_albedo = analysis.get_forest_area_albedo(fpc_forest_real, snow)
+    fpc_with_albedo = fpc_with_albedo.reset_index()
+    return fpc_with_albedo
 
 
 def get_forest_et(basepath, year1, year2, lons_lats_of_interest, aet_only=False):
@@ -445,14 +480,18 @@ def get_forest_et(basepath, year1, year2, lons_lats_of_interest, aet_only=False)
     return aet.reset_index()
 
 
-def get_forest_swp(basepath, year1, year2, lons_lats_of_interest):
+def get_forest_swp(basepath, year1, year2, lons_lats_of_interest, only_forest=True):
     swp_upper = ph.read_for_years(basepath + 'mpsi_s_upper_forest.out', year1=year1, year2=year2, lons_lats_of_interest=lons_lats_of_interest)
     swp_lower = ph.read_for_years(basepath + 'mpsi_s_lower_forest.out', year1=year1, year2=year2, lons_lats_of_interest=lons_lats_of_interest)
+    if not only_forest:
+        swp_upper = ph.read_for_years(basepath + 'mpsi_s_upper.out', year1=year1, year2=year2, lons_lats_of_interest=lons_lats_of_interest)
+        swp_lower = ph.read_for_years(basepath + 'mpsi_s_lower.out', year1=year1, year2=year2, lons_lats_of_interest=lons_lats_of_interest)
 
     # upper layer is 50cm, lower layer is 100cm deep
     swp_upper.iloc[:, 3:15] = (0.5 * swp_upper.iloc[:, 3:15] + swp_lower.iloc[:, 3:15]) / 1.5
 
     swp_upper['min'] = swp_upper.loc[:, months].min(axis=1)
+    swp_upper['mean'] = swp_upper.loc[:, months].mean(axis=1)
     return swp_upper
 
 

@@ -36,7 +36,8 @@ def optimize_gridcell(rcps, simulations_paths, used_simulations, es, constraints
                                                                                                                                           used_variables=es,
                                                                                                                                           boundary_simulations=[], lon=row[0],
                                                                                                                                           lat=row[1],
-                                                                                                                                          variables_for_additional_constraints=constraints)
+                                                                                                                                          variables_for_additional_constraints=constraints,
+                                                                                                                                          discounting=discounting)
 
         all_rcp_solution_new = opt.solve_optimization_for_gridcell_general_min_max_distance(es_vals_all_rcps_new, rcps,
                                                                                             lambda_opt=lambda_opt,
@@ -90,7 +91,7 @@ def optimize_gridcell(rcps, simulations_paths, used_simulations, es, constraints
         if file_basepath:
             oplot.plot_optimization_results2(output, luyssaert=False, save_to=file_basepath + '_' + str(row[0]) + '_' + str(row[1]) + '.png')
         elif plot_for_paper_name:
-            oplot.plot_optimization_results2(output, luyssaert=False, row_nr=row_nr, save_to='/home/konni/Documents/konni/projekte/phd/my_papers/optimization_paper-Review/' + plot_for_paper_name + '.png')
+            oplot.plot_optimization_results2(output, luyssaert=False, row_nr=row_nr, save_to='/home/konni/Documents/phd/my_papers/optimization_paper-Review/' + plot_for_paper_name + '.png')
         else:
             oplot.plot_optimization_results2(output, luyssaert=False, row_nr=row_nr)
 

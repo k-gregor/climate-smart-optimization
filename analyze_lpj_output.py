@@ -407,14 +407,54 @@ def normalize_fpc(fpc_forest):
     # In Boisier2013, shrubs are considered grass
     fpc_forest['grass'] = fpc_forest.loc[:, shrub_pfts].sum(axis=1) + fpc_forest.loc[:, grass_pfts].sum(axis=1)
     fpc_forest['bare'] = 0
-    fpc_forest['forest_fpc'] = 0
+    fpc_forest['total_fpc_trees'] = fpc_forest['evergreen'] + fpc_forest['deciduous']
     fpc_forest['total_fpc'] = fpc_forest['evergreen'] + fpc_forest['deciduous'] + fpc_forest['grass']
     fpc_forest['bare'] = 1 - fpc_forest['total_fpc']
     # normalize when total fpc is larger than 1
     fpc_forest.loc[fpc_forest['total_fpc'] > 1, ['evergreen', 'deciduous', 'grass']] = fpc_forest.loc[:, ['evergreen', 'deciduous', 'grass']].div(fpc_forest['total_fpc'], axis=0)
+    fpc_forest.loc[fpc_forest['total_fpc'] > 1, ['ne', 'bd', 'be', 'nd', 'grass']] = fpc_forest.loc[:, ['ne', 'bd', 'be', 'nd', 'grass']].div(fpc_forest['total_fpc'], axis=0)
     fpc_forest.loc[fpc_forest['total_fpc'] >= 1, ['total_fpc']] = 1
     fpc_forest.loc[fpc_forest['total_fpc'] >= 1, ['bare']] = 0
 
     fpc_forest['tree_fpc'] = fpc_forest['evergreen'] + fpc_forest['deciduous']
 
+    return fpc_forest
+
+
+def get_forest_area_albedo(fpc_forest, snow):
+    """
+    fpc_forest has to be adapted for land cover fraction beforehand!
+    I.e., the fpc.out from LPJ has the FPC according to the "active area" of that FPC. We need to take that into account.
+    But this is done before it is passed in here.
+    """
+
+    # summer, winter winter+snow, from Boisier
+    # MODIS seasonal mean shortwave broadband (0.3–5 µm) bihemispherical reflectance (white-sky albedo)
+    # They argue: white-sky albedo iss a good approx for the daily mean surface albedo.
+    albedos = dict(
+        crops=(0.178, 0.141, 0.546),
+        grass=(0.176, 0.161, 0.568),
+        evergreen=(0.104, 0.094, 0.205),
+        deciduous=(0.153, 0.117, 0.244),
+        bare=(0.246, 0.205, 0.535),  # first value: from Boisier, which is average over Northern Hemisphere extratropics so should be ok.
+        unknown=0.15
+    )
+
+
+
+
+    pd.testing.assert_index_equal(fpc_forest.index, snow.index)
+
+    fpc_forest = normalize_fpc(fpc_forest)
+
+    # note: if there is snow in summer, we take the winter+snow albedo values.
+    fpc_forest['albedo_jul'] = fpc_forest['evergreen'] * (snow['Jul'] * albedos['evergreen'][2] + (1 - snow['Jul']) * albedos['evergreen'][0]) \
+                               + fpc_forest['deciduous'] * (snow['Jul'] * albedos['deciduous'][2] + (1 - snow['Jul']) * albedos['deciduous'][0]) \
+                               + fpc_forest['grass'] * (snow['Jul'] * albedos['grass'][2] + (1 - snow['Jul']) * albedos['grass'][0]) \
+                               + fpc_forest['bare'] * (snow['Jul'] * albedos['bare'][2] + (1 - snow['Jul']) * albedos['bare'][0])
+
+    fpc_forest['albedo_jan'] = fpc_forest['evergreen'] * (snow['Jan'] * albedos['evergreen'][2] + (1 - snow['Jan']) * albedos['evergreen'][1]) \
+                               + fpc_forest['deciduous'] * (snow['Jan'] * albedos['deciduous'][2] + (1 - snow['Jan']) * albedos['deciduous'][1]) \
+                               + fpc_forest['grass'] * (snow['Jan'] * albedos['grass'][2] + (1 - snow['Jan']) * albedos['grass'][1]) \
+                               + fpc_forest['bare'] * (snow['Jan'] * albedos['bare'][2] + (1 - snow['Jan']) * albedos['bare'][1])
     return fpc_forest

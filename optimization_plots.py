@@ -245,7 +245,7 @@ def plot_optimization_results2(output, luyssaert=False, save_to=None, plot_only_
     position_change_for_a = 0.2 if radar else 0.25
     fig.add_annotation(x=fig['layout']['annotations'][0]['x'] - position_change_for_a, y=1.2,
                        xref="paper", yref="paper",
-                       text="<b>" + chr(ord('a') + start_lettering) + ")</b> ESI Performance 2100-2130 (individual management options)",
+                       text="<b>" + chr(ord('a') + start_lettering) + ")</b> ESI Performance 2100-2130 (indiv. management)",
                        font=dict(size=15),
                        showarrow=False)
     fig.add_annotation(x=fig['layout']['annotations'][1]['x'] + 0.02, y=1.2,
